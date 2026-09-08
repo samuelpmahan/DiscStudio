@@ -426,5 +426,6 @@
 	.winner { color: #8e6723; background: #f5e9ca; }
 	.disclosures { display: grid; gap: 4px; margin-top: 12px; padding: 10px 12px; border: 1px solid #d8d1c4; border-radius: 7px; background: #fffef9; color: #68766e; font-size: 10px; }
 	.disclosures strong { color: #425b2e; }
+	@media (min-width: 701px) { .stage-card { width: min(100%, max(320px, calc(177.78vh - 658px))); margin-inline: auto; } }
 	@media (max-width: 700px) { .topbar { flex-wrap: wrap; gap: 12px; } .mode-switch { order: 3; width: 100%; margin: 0; } .mode-switch button { flex: 1; } .export-top { margin-left: auto; } .page { padding: 25px 13px 40px; } .setting { align-items: flex-start; flex-wrap: wrap; } .setting select, .range { width: 100%; } .below-stage { grid-template-columns: 1fr; } .stage-foot { display: grid; gap: 4px; } .snapshot-actions { align-items: stretch; } .add-entry { align-items: stretch; flex-wrap: wrap; } .add-entry .select-label { min-width: 100%; } .add-entry .outline { width: 100%; } .entry { grid-template-columns: 23px minmax(0, 1fr) auto; } .snapshot-edit { grid-column: 2 / -1; justify-content: flex-end; flex-wrap: wrap; } }
 </style>
