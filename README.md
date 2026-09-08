@@ -30,3 +30,5 @@ Open `/`, `/concept-a/`, or `/concept-b/`. The artifact smoke check verifies tha
 ## GitHub Pages
 
 The deployment workflow publishes `dist` after `npm ci` and `npm run smoke`. The resulting Pages paths are `/DiscStudio/`, `/DiscStudio/concept-a/`, and `/DiscStudio/concept-b/` when the repository is hosted at `samuelpmahan/DiscStudio`.
+
+Both concepts include the same collapsed Tick/Part checklist from `public/shared/tick-part-checklist.js`. Provide `data-checklist` and a unique `storage-key` on the custom element so future integrations can configure its rows without coupling their saved review state.

@@ -2,8 +2,11 @@ import {createWorkspace, findDisc, addEntry, removeEntry, removeDisc, anotherDis
   validateWorkspace, MAX_DISCS, MAX_BACKUP_BYTES, uid} from './model.js';
 import {openStorage, readPhoto, downloadBlob} from './storage.js';
 import {esc, thumb, renderScene, pngFromScene} from './render.js';
+import '../shared/tick-part-checklist.js';
+import {defaultChecklist} from '../shared/checklist-data.js';
 
 const $ = id => document.getElementById(id);
+document.querySelector('tick-part-checklist')?.setAttribute('data-checklist', JSON.stringify(defaultChecklist));
 let workspace = createWorkspace();
 // Editor focus is intentionally not persisted or coupled to on-screen highlighting.
 let selectedDiscId = workspace.card.discId;
