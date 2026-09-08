@@ -4,6 +4,7 @@ A static comparison site that preserves two Disc Studio explorations:
 
 - **Concept A** is the original vanilla Creator workbench source in `public/concept-a/`.
 - **Concept B** is rebuilt from its Svelte entry in `source/concept-b/` and components in `source/disc-studio/`.
+- **Merged candidate** is a provisional `/candidate/` route that combines Concept B's shelf and facts with Concept A's compact transparent graphic export.
 
 ## Source provenance
 
@@ -25,7 +26,11 @@ If the Vite preview command is unavailable in a constrained environment, serve t
 python3 -m http.server 4173 --directory dist
 ```
 
-Open `/`, `/concept-a/`, or `/concept-b/`. The artifact smoke check verifies that the built routing files exist and that the root chooser links to both concepts.
+Open `/`, `/concept-a/`, `/concept-b/`, or `/candidate/`. The artifact smoke check verifies that the built routing files exist and that the root chooser links to both concepts and the candidate.
+
+The candidate stores its workspace, Bags, design preferences, navigation, and checklist state under separate candidate-specific browser keys. DiscShelf/MyBag is the first page; On the Course defaults to Single Disc and can switch to Disc Battle. The course page exports transparent PNG graphics through Concept A's renderer.
+
+The two-page domain contract and remaining boundaries are documented in `docs/candidate-mybag-handoff.md`.
 
 ## GitHub Pages
 

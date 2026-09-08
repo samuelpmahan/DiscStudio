@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && vite build --config source/concept-b/vite.config.ts",
+    "build": "vite build && vite build --config source/concept-b/vite.config.ts && vite build --config source/candidate/vite.config.ts",
     "preview": "vite preview",
     "smoke": "npm run build && node scripts/smoke.mjs"
   },
