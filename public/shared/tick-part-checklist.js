@@ -31,6 +31,25 @@
       this._render();
     }
 
+    // Keep opening the shared widget available to host navigation as well as
+    // the compact floating control. This leaves one checklist instance and
+    // therefore one persisted state per route.
+    open() {
+      if (!this._state) this._readAttributes();
+      this._state.collapsed = false;
+      this._saveState();
+      this._render();
+      this.shadowRoot.getElementById('checklist-hide')?.focus();
+    }
+
+    hide() {
+      if (!this._state) this._readAttributes();
+      this._state.collapsed = true;
+      this._saveState();
+      this._render();
+      this.shadowRoot.getElementById('checklist-reopen')?.focus();
+    }
+
     attributeChangedCallback(name, oldValue, newValue) {
       if (oldValue === newValue || !this.isConnected) return;
       this._readAttributes();
@@ -147,19 +166,17 @@
 
       this.shadowRoot.innerHTML = '<style>' + this._styles() + '</style>' +
         '<div class="widget ' + (collapsed ? 'is-collapsed' : '') + '">' +
-        '<button type="button" id="checklist-reopen" class="reopen" aria-label="Open checklist"' + (collapsed ? '' : ' hidden') + '>Checklist</button>' +
-        '<section class="panel" aria-label="Your checklist"' + (collapsed ? ' hidden' : '') + '>' +
+        '<button type="button" id="checklist-reopen" class="reopen" aria-label="Open Tick and Part checklist"' + (collapsed ? '' : ' hidden') + '>Checklist</button>' +
+        '<section class="panel" aria-label="Tick and Part checklist"' + (collapsed ? ' hidden' : '') + '>' +
         '<div class="header"><h2>Your checklist</h2><button type="button" id="checklist-hide" class="hide" aria-label="Hide checklist">Hide</button></div>' +
         (this._checklist.length ? '<ul class="ticks">' + ticksMarkup + '</ul>' : '<p class="empty">No checklist items.</p>') +
         '</section></div>';
 
       this.shadowRoot.querySelector('.reopen').addEventListener('click', () => {
-        this._state.collapsed = false; this._saveState(); this._render();
-        this.shadowRoot.getElementById('checklist-hide')?.focus();
+        this.open();
       });
       this.shadowRoot.querySelector('.hide').addEventListener('click', () => {
-        this._state.collapsed = true; this._saveState(); this._render();
-        this.shadowRoot.getElementById('checklist-reopen')?.focus();
+        this.hide();
       });
       this.shadowRoot.querySelectorAll('[data-tick-toggle]').forEach((input) => {
         input.addEventListener('change', () => {
@@ -187,7 +204,7 @@
     }
 
     _styles() {
-      return ':host{position:fixed;right:12px;bottom:12px;z-index:1000;display:block;box-sizing:border-box;width:min(360px,calc(100vw - 24px));max-width:calc(100vw - 24px);pointer-events:none;font:14px/1.4 system-ui,-apple-system,sans-serif;color:#1f2937}.widget{width:100%;box-sizing:border-box;pointer-events:auto;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 2px 8px #00000012;overflow:hidden}.widget.is-collapsed{width:max-content;margin-left:auto}.panel{max-height:min(440px,calc(100vh - 80px));overflow:auto}.reopen,.hide{font:inherit;cursor:pointer;border:1px solid #9ca3af;background:#f9fafb;color:#374151;border-radius:5px;padding:3px 8px}.reopen{font-size:12px;margin:4px}.reopen:focus-visible,.hide:focus-visible,input:focus-visible{outline:2px solid #2563eb;outline-offset:2px}.header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-bottom:1px solid #e5e7eb}.header h2{font-size:14px;margin:0;font-weight:650}.hide{font-size:12px}.ticks,.parts{list-style:none;padding:0;margin:0}.ticks{padding:5px 10px 8px}.tick{padding:5px 0}.tick-label,.parts label{display:flex;align-items:flex-start;gap:7px;cursor:pointer}.tick-label{font-weight:600}.parts{padding:2px 0 0 25px}.parts li{padding:3px 0;font-weight:400}.parts input,.tick-label input{flex:none;margin-top:3px}.empty{padding:8px 10px;color:#6b7280;margin:0}@media(max-width:260px){.header{align-items:flex-start;flex-direction:column}.parts{padding-left:20px}}';
+      return ':host{position:fixed;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:1000;display:block;box-sizing:border-box;width:min(360px,calc(100vw - 24px));max-width:calc(100vw - 24px);pointer-events:none;isolation:isolate;font:14px/1.4 system-ui,-apple-system,sans-serif;color:#1f2937;color-scheme:light}.widget{width:100%;box-sizing:border-box;pointer-events:auto;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 2px 8px #00000012;overflow:hidden}.widget.is-collapsed{width:max-content;margin-left:auto}.panel{max-height:min(440px,calc(100vh - 80px));overflow:auto}.reopen,.hide{font:inherit;cursor:pointer;border:1px solid #9ca3af;background:#f9fafb;color:#374151;border-radius:5px;padding:3px 8px}.reopen{font-size:12px;margin:4px}.reopen:focus-visible,.hide:focus-visible,input:focus-visible{outline:2px solid #2563eb;outline-offset:2px}.header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-bottom:1px solid #e5e7eb}.header h2{font-size:14px;margin:0;font-weight:650}.hide{font-size:12px}.ticks,.parts{list-style:none;padding:0;margin:0}.ticks{padding:5px 10px 8px}.tick{padding:5px 0}.tick-label,.parts label{display:flex;align-items:flex-start;gap:7px;cursor:pointer}.tick-label{font-weight:600}.parts{padding:2px 0 0 25px}.parts li{padding:3px 0;font-weight:400}.parts input,.tick-label input{flex:none;margin-top:3px}.empty{padding:8px 10px;color:#6b7280;margin:0}@media(max-width:260px){.header{align-items:flex-start;flex-direction:column}.parts{padding-left:20px}}';
     }
   }
 

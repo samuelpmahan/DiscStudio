@@ -48,7 +48,7 @@
 		battleLayout: 'row' as 'row' | 'stack',
 		showInstanceLabel: true,
 		showFlightNumbers: true,
-		settingsOpen: true
+		settingsOpen: false
 	};
 
 	let mode = $state<CourseMode>(defaultPrefs.mode);
@@ -134,7 +134,7 @@
 
 	function chooseMode(next: CourseMode) {
 		mode = next;
-		message = next === 'card' ? 'Single Disc is a view choice; editor battle selection stays separate.' : 'Disc Battle uses authored highlight and winner emphasis from the shared workspace.';
+		message = next === 'card' ? 'Single Disc preview selected.' : 'Disc Battle preview selected.';
 	}
 
 	function inspectEntry(id: string) {
@@ -223,7 +223,7 @@
 		contextUrl = URL.createObjectURL(file);
 		contextName = file.name;
 		contextKind = file.type.startsWith('video/') ? 'video' : 'image';
-		message = 'Your footage is local preview context and stays out of the transparent PNG.';
+		message = 'Footage added to the preview.';
 		queueMicrotask(() => contextKind === 'video' && videoElement?.play().catch(() => undefined));
 	}
 
@@ -250,7 +250,7 @@
 			link.download = filename;
 			link.click();
 			setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-			message = 'Transparent PNG saved. Footage and editor selection are excluded.';
+			message = 'Transparent PNG download started.';
 		} catch (cause) {
 			error = (cause as Error).message;
 		} finally {
@@ -284,7 +284,7 @@
 				}
 			}
 			onBattleStateChange?.(current);
-			message = failures.length ? `Prepared ${saved} of ${battleState.snapshots.length} battle image downloads. ${failures.length} failed: ${failures.join(' ')}` : `Prepared all ${saved} battle image downloads in order.`;
+			message = failures.length ? `Started ${saved} of ${battleState.snapshots.length} battle PNG downloads in order. ${failures.length} could not be prepared: ${failures.join(' ')}` : `Started ${saved} battle PNG downloads in order.`;
 		} finally {
 			exportBusy = false;
 		}
@@ -304,15 +304,15 @@
 	<header class="topbar">
 		<div class="brand"><span class="mark" aria-hidden="true">◒</span><strong>CHAINSPOT</strong><span class="divider"></span><span>ON THE COURSE</span></div>
 		<div class="mode-switch" aria-label="Graphic mode"><button class:active={mode === 'card'} onclick={() => chooseMode('card')} aria-pressed={mode === 'card'}>Single Disc</button><button class:active={mode === 'battle'} onclick={() => chooseMode('battle')} aria-pressed={mode === 'battle'}>Disc Battle</button></div>
-		<button class="export-top" onclick={exportPreview} disabled={!canExport}>{exportBusy ? 'Preparing…' : 'Transparent PNG ↓'}</button>
+		<button class="export-top" onclick={exportPreview} disabled={!canExport} aria-label="Download current transparent PNG">{exportBusy ? 'Preparing…' : 'Download PNG ↓'}</button>
 	</header>
 
 	{#if error}<div class="notice error" role="alert"><span>{error}</span><button onclick={() => (error = '')} aria-label="Dismiss error">×</button></div>{/if}
 	{#if message}<div class="notice" role="status"><span>{message}</span><button onclick={() => (message = '')} aria-label="Dismiss notice">×</button></div>{/if}
 
 	<main class="page">
-		<div class="page-heading"><div><span class="eyebrow">ON THE COURSE</span><h1>Put it in the frame.</h1><p>Preview your graphic over footage, then export only the transparent layer.</p></div><button class="settings-toggle" onclick={() => (settingsOpen = !settingsOpen)} aria-expanded={settingsOpen}>Design settings {settingsOpen ? '⌃' : '⌄'}</button></div>
-		{#if settingsOpen}<section class="settings" aria-label="Design settings">
+		<div class="page-heading"><div><span class="eyebrow">ON THE COURSE</span><h1>Put it in the frame.</h1><p>Preview your graphic over footage, then download a transparent PNG.</p></div><button class="settings-toggle" onclick={() => (settingsOpen = !settingsOpen)} aria-expanded={settingsOpen} aria-controls="design-settings">Design settings <span aria-hidden="true">{settingsOpen ? '⌃' : '⌄'}</span></button></div>
+		{#if settingsOpen}<section id="design-settings" class="settings" aria-label="Design settings">
 			<div class="setting"><div><strong>Theme</strong><small>Sets the graphic treatment and preview canvas.</small></div><div class="segmented"><button class:active={theme === 'dark'} onclick={() => (theme = 'dark')} aria-pressed={theme === 'dark'}>Dark</button><button class:active={theme === 'light'} onclick={() => (theme = 'light')} aria-pressed={theme === 'light'}>Light</button></div></div>
 			<div class="setting"><div><strong>Layout</strong><small>{mode === 'card' ? 'Single Disc card shape.' : 'Disc Battle arrangement.'}</small></div><div class="segmented">{#if mode === 'card'}<button class:active={cardLayout === 'wide'} onclick={() => (cardLayout = 'wide')} aria-pressed={cardLayout === 'wide'}>Wide</button><button class:active={cardLayout === 'portrait'} onclick={() => (cardLayout = 'portrait')} aria-pressed={cardLayout === 'portrait'}>Portrait</button>{:else}<button class:active={battleLayout === 'row'} onclick={() => (battleLayout = 'row')} aria-pressed={battleLayout === 'row'}>Row</button><button class:active={battleLayout === 'stack'} onclick={() => (battleLayout = 'stack')} aria-pressed={battleLayout === 'stack'}>Stack</button>{/if}</div></div>
 			<div class="setting"><div><strong>Screen placement</strong><small>Choose where the overlay sits in the frame.</small></div><select bind:value={anchor} aria-label="Screen placement"><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option><option value="center">Center</option></select></div>
@@ -326,12 +326,12 @@
 				{#if contextUrl}{#if contextKind === 'video'}<video class="context-video" bind:this={videoElement} src={contextUrl} controls muted loop playsinline onerror={clearVideo}></video>{:else}<img class="context-image" src={contextUrl} alt="Local course context" onerror={clearVideo} />{/if}{/if}
 				{#if scene.blocked}<div class="blocked"><strong>{scene.blocked}</strong><p>Choose a supported renderer result to enable export.</p></div>{:else if scene.svg}<div class="overlay">{@html scene.svg}</div>{:else}<div class="blocked"><strong>Nothing to preview yet.</strong><p>Select a disc or add a battle entry.</p></div>{/if}
 			</div>
-			<div class="stage-foot"><span>{contextUrl ? `${contextName} · local context` : 'Checkerboard shows transparent areas'}</span><span>Selection stays outside export</span></div>
+			<div class="stage-foot"><span>{contextUrl ? `Previewing ${contextName}` : 'Checkerboard shows transparent areas'}</span><span>{mode === 'card' ? 'Single disc' : 'Battle state'} · {scene.cardCount} {scene.cardCount === 1 ? 'graphic' : 'graphics'}</span></div>
 		</section>
 
 		<div class="below-stage">
-			<section class="footage-card" aria-label="Footage controls"><div class="card-head"><div><span class="eyebrow">YOUR FOOTAGE</span><h2>Context image or video</h2></div><button class="quiet" onclick={clearVideo} disabled={!contextUrl}>Clear</button></div>{#if contextUrl}<p>{contextName} · object URL active</p>{:else}<p>Choose a JPG, PNG, WebP, MP4, or WebM to inspect placement in the 16:9 stage.</p>{/if}<input class="hidden" bind:this={videoInput} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onchange={chooseVideo} aria-label="Choose footage" /><button class="outline" onclick={() => videoInput?.click()}>＋ Choose footage</button></section>
-			<section class="selection-card" aria-label="Course selection"><div class="card-head"><div><span class="eyebrow">BATTLE EDITOR</span><h2>{mode === 'card' ? 'Single Disc' : 'Disc Battle'}</h2></div></div>{#if mode === 'card'}<label class="select-label">Disc<select bind:value={selectedDiscId} aria-label="Single Disc choice">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><p>Choose the disc shown in the single card.</p>{:else}<div class="snapshot-actions"><button class="quiet" onclick={duplicateSnapshot}>Duplicate state</button><button class="quiet" onclick={exportAllSnapshots} disabled={!battleState?.snapshots.length || exportBusy}>{exportBusy ? 'Exporting…' : `Export ${battleState?.snapshots.length ?? 0} states`}</button><button class="quiet" onclick={() => moveSnapshot(-1)} disabled={!activeSnapshot}>↑</button><button class="quiet" onclick={() => moveSnapshot(1)} disabled={!activeSnapshot}>↓</button></div>{#if battleState?.snapshots.length}<label class="select-label">Battle state<select value={activeSnapshot?.id ?? ''} onchange={(event) => chooseSnapshot((event.currentTarget as HTMLSelectElement).value)} aria-label="Battle state choice">{#each battleState.snapshots as snapshot, index (snapshot.id)}<option value={snapshot.id}>State {index + 1}{snapshot.imageExport ? ' · PNG saved' : ''}</option>{/each}</select></label>{/if}<div class="add-entry"><label class="select-label">Add disc<select bind:value={selectedDiscId} aria-label="Disc to add">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><button class="outline" type="button" onclick={addBattleEntry} disabled={!activeSnapshot || !selectedDiscId}>＋ Add to battle</button></div><div class="entry-list">{#each renderWorkspace.battle.entries as entry, index (entry.id)}{@const disc = workspace.discs.find((item) => item.id === entry.discId)}<div class="entry" class:selected={selectedEntryId === entry.id} role="button" tabindex="0" onclick={() => inspectEntry(entry.id)} onkeydown={(event) => (event.key === 'Enter' || event.key === ' ') && inspectEntry(entry.id)} aria-pressed={selectedEntryId === entry.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{disc?.mold || 'Untitled disc'}</strong><label class="score"><span class="sr-only">Score for {disc?.mold || 'disc'}</span><input type="number" step="any" value={entry.score} onchange={(event) => { event.stopPropagation(); const value = Number((event.currentTarget as HTMLInputElement).value); if (Number.isFinite(value)) editSnapshotEntry(entry.id, 'score', value); }} onclick={(event) => event.stopPropagation()} aria-label={`Score for ${disc?.mold || 'disc'}`} /></label>{#if activeSnapshot}<span class="snapshot-edit"><button type="button" onclick={(event) => { event.stopPropagation(); removeBattleEntry(entry.id); }} aria-label="Remove battle entry">Remove</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'highlight'); }} aria-label="Toggle highlight">H</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'winner'); }} aria-label="Toggle winner">W</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'up'); }} aria-label="Move entry up">↑</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'down'); }} aria-label="Move entry down">↓</button></span>{/if}{#if renderWorkspace.battleVisual.highlightedEntryId === entry.id}<i class="highlight">Highlight</i>{/if}{#if renderWorkspace.battleVisual.emphasizedEntryIds.includes(entry.id)}<i class="winner">★ Winner</i>{/if}</div>{/each}</div><p>Each change creates a complete new battle state, preserving the earlier state and its image.</p>{/if}</section>
+			<section class="footage-card" aria-label="Footage controls"><div class="card-head"><div><span class="eyebrow">YOUR FOOTAGE</span><h2>Context image or video</h2></div><button class="quiet" onclick={clearVideo} disabled={!contextUrl} aria-label="Clear footage">Clear</button></div>{#if contextUrl}<p>{contextName}</p>{:else}<p>Choose a JPG, PNG, WebP, MP4, or WebM to inspect placement in the 16:9 stage.</p>{/if}<input class="hidden" bind:this={videoInput} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onchange={chooseVideo} aria-label="Choose footage" /><button class="outline" onclick={() => videoInput?.click()}>＋ Choose footage</button></section>
+			<section class="selection-card" aria-label="Course selection"><div class="card-head"><div><span class="eyebrow">{mode === 'card' ? 'DISC CHOICE' : 'BATTLE EDITOR'}</span><h2>{mode === 'card' ? 'Single Disc' : 'Disc Battle'}</h2></div></div>{#if mode === 'card'}<label class="select-label">Disc<select bind:value={selectedDiscId} aria-label="Single Disc choice">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><p>Choose the disc shown in the single card.</p>{:else}<div class="snapshot-actions"><button class="quiet" onclick={duplicateSnapshot} aria-label="Duplicate selected battle state">Duplicate state</button><button class="quiet" onclick={exportAllSnapshots} disabled={!battleState?.snapshots.length || exportBusy} aria-label="Download all battle states as PNGs">{exportBusy ? 'Exporting…' : `Download ${battleState?.snapshots.length ?? 0} PNGs`}</button><button class="quiet icon-button" onclick={() => moveSnapshot(-1)} disabled={!activeSnapshot} aria-label="Move battle state earlier" title="Move state earlier">↑</button><button class="quiet icon-button" onclick={() => moveSnapshot(1)} disabled={!activeSnapshot} aria-label="Move battle state later" title="Move state later">↓</button></div>{#if battleState?.snapshots.length}<label class="select-label">Battle state<select value={activeSnapshot?.id ?? ''} onchange={(event) => chooseSnapshot((event.currentTarget as HTMLSelectElement).value)} aria-label="Battle state choice">{#each battleState.snapshots as snapshot, index (snapshot.id)}<option value={snapshot.id}>State {index + 1}{snapshot.imageExport ? ' · PNG saved' : ''}</option>{/each}</select></label>{/if}<div class="add-entry"><label class="select-label">Add disc<select bind:value={selectedDiscId} aria-label="Disc to add">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><button class="outline" type="button" onclick={addBattleEntry} disabled={!activeSnapshot || !selectedDiscId}>＋ Add to battle</button></div><div class="entry-list">{#each renderWorkspace.battle.entries as entry, index (entry.id)}{@const disc = workspace.discs.find((item) => item.id === entry.discId)}<div class="entry" class:selected={selectedEntryId === entry.id} role="button" tabindex="0" onclick={() => inspectEntry(entry.id)} onkeydown={(event) => (event.key === 'Enter' || event.key === ' ') && inspectEntry(entry.id)} aria-pressed={selectedEntryId === entry.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{disc?.mold || 'Untitled disc'}</strong><label class="score"><span class="sr-only">Score for {disc?.mold || 'disc'}</span><input type="number" step="any" value={entry.score} onchange={(event) => { event.stopPropagation(); const value = Number((event.currentTarget as HTMLInputElement).value); if (Number.isFinite(value)) editSnapshotEntry(entry.id, 'score', value); }} onclick={(event) => event.stopPropagation()} aria-label={`Score for ${disc?.mold || 'disc'}`} /></label>{#if activeSnapshot}<span class="snapshot-edit"><button type="button" onclick={(event) => { event.stopPropagation(); removeBattleEntry(entry.id); }} aria-label={`Remove ${disc?.mold || 'disc'} from battle`}>Remove</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'highlight'); }} aria-label={`Toggle highlight for ${disc?.mold || 'disc'}`}>Highlight</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'winner'); }} aria-label={`Toggle winner for ${disc?.mold || 'disc'}`}>Winner</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'up'); }} aria-label={`Move ${disc?.mold || 'disc'} up`}>↑</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'down'); }} aria-label={`Move ${disc?.mold || 'disc'} down`}>↓</button></span>{/if}{#if renderWorkspace.battleVisual.highlightedEntryId === entry.id}<i class="highlight">Highlight</i>{/if}{#if renderWorkspace.battleVisual.emphasizedEntryIds.includes(entry.id)}<i class="winner">★ Winner</i>{/if}</div>{/each}</div><p>Edits create a new battle state, so earlier results remain available.</p>{/if}</section>
 		</div>
 
 		{#if scene.disclosures?.length}<div class="disclosures" aria-label="Export notes"><strong>Export note</strong>{#each scene.disclosures as disclosure}<span>{disclosure}</span>{/each}</div>{/if}
@@ -353,6 +353,7 @@
 	.mode-switch button, .export-top, .settings-toggle, .quiet { border: 0; border-radius: 6px; padding: 8px 11px; color: #68766e; background: transparent; }
 	.mode-switch button.active { color: #425b2e; background: #e1ead5; font-weight: 700; }
 	.mode-switch button:hover, .settings-toggle:hover, .quiet:hover { background: #eee9df; color: #425b2e; }
+	:global(button:focus-visible), :global(select:focus-visible), :global(input:focus-visible) { outline: 2px solid #5f7c3b; outline-offset: 2px; }
 	.export-top { color: #fffef9; background: #5f7c3b; font-size: 11px; }
 	.export-top:hover { background: #4d6930; }
 	.notice { display: flex; justify-content: space-between; gap: 12px; margin: 12px auto 0; max-width: 1180px; padding: 9px 13px; border: 1px solid #b7c99f; border-radius: 8px; background: #edf3e4; color: #425b2e; font-size: 12px; }
@@ -407,6 +408,9 @@
 	.entry-list { display: grid; gap: 5px; }
 	.entry { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 6px; text-align: left; color: #243b2d; background: #f2eee5; }
 	.snapshot-actions, .add-entry { display: flex; align-items: end; gap: 6px; margin-bottom: 9px; }
+	.snapshot-actions { flex-wrap: wrap; }
+	.snapshot-actions .quiet { white-space: nowrap; }
+	.icon-button { min-width: 28px; padding-inline: 7px; }
 	.add-entry .select-label { flex: 1; }
 	.add-entry .outline { width: auto; white-space: nowrap; }
 	.score input { width: 72px; border: 1px solid #d5cdbf; border-radius: 4px; padding: 4px 5px; color: #243b2d; background: #fffef9; font-size: 11px; }
@@ -422,5 +426,5 @@
 	.winner { color: #8e6723; background: #f5e9ca; }
 	.disclosures { display: grid; gap: 4px; margin-top: 12px; padding: 10px 12px; border: 1px solid #d8d1c4; border-radius: 7px; background: #fffef9; color: #68766e; font-size: 10px; }
 	.disclosures strong { color: #425b2e; }
-	@media (max-width: 700px) { .topbar { flex-wrap: wrap; gap: 12px; } .mode-switch { order: 3; width: 100%; margin: 0; } .mode-switch button { flex: 1; } .export-top { margin-left: auto; } .page { padding: 25px 13px 40px; } .setting { align-items: flex-start; flex-wrap: wrap; } .setting select, .range { width: 100%; } .below-stage { grid-template-columns: 1fr; } .stage-foot { display: grid; gap: 4px; } }
+	@media (max-width: 700px) { .topbar { flex-wrap: wrap; gap: 12px; } .mode-switch { order: 3; width: 100%; margin: 0; } .mode-switch button { flex: 1; } .export-top { margin-left: auto; } .page { padding: 25px 13px 40px; } .setting { align-items: flex-start; flex-wrap: wrap; } .setting select, .range { width: 100%; } .below-stage { grid-template-columns: 1fr; } .stage-foot { display: grid; gap: 4px; } .snapshot-actions { align-items: stretch; } .add-entry { align-items: stretch; flex-wrap: wrap; } .add-entry .select-label { min-width: 100%; } .add-entry .outline { width: 100%; } .entry { grid-template-columns: 23px minmax(0, 1fr) auto; } .snapshot-edit { grid-column: 2 / -1; justify-content: flex-end; flex-wrap: wrap; } }
 </style>

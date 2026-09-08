@@ -75,6 +75,11 @@
 		page = next;
 	}
 
+	function openChecklist() {
+		const checklist = document.querySelector('tick-part-checklist') as (HTMLElement & { open?: () => void }) | null;
+		checklist?.open?.();
+	}
+
 	function addBag(name: string) {
 		const id = `bag-${crypto.randomUUID?.() ?? Date.now().toString(36)}`;
 		bagState = { ...bagState, bags: [...bagState.bags, createBag(id, name)] };
@@ -114,9 +119,12 @@
 <div class="app-shell">
 	<nav aria-label="Candidate pages">
 		<div><strong>DiscStudio</strong><span>merged candidate</span></div>
-		<div class="tabs">
+		<div class="nav-actions">
+			<button class="checklist-launch" onclick={openChecklist}>Checklist</button>
+			<div class="tabs">
 			<button class:active={page === 'shelf'} aria-current={page === 'shelf' ? 'page' : undefined} onclick={() => setPage('shelf')}>DiscShelf</button>
 			<button class:active={page === 'course'} aria-current={page === 'course' ? 'page' : undefined} onclick={() => setPage('course')}>On the Course</button>
+			</div>
 		</div>
 	</nav>
 	{#if error}<div class="app-error" role="alert"><span>{error}</span><button onclick={() => (error = '')} aria-label="Dismiss error">×</button></div>{/if}
@@ -155,9 +163,13 @@
 	nav > div:first-child { display: flex; align-items: baseline; gap: 8px; }
 	nav strong { font-size: 14px; }
 	nav span { color: #758278; font: 9px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+	.nav-actions { display: flex; align-items: center; gap: 8px; }
+	.checklist-launch { min-height: 34px; border: 1px solid #9aad86; border-radius: 6px; padding: 7px 11px; color: #425b2e; background: #edf3e4; font-size: 12px; cursor: pointer; }
+	.checklist-launch:hover { background: #e1ead5; }
 	.tabs { display: flex; gap: 3px; padding: 3px; border: 1px solid #d5cdbf; border-radius: 8px; background: #f5f1e8; }
 	.tabs button { border: 0; border-radius: 6px; padding: 7px 12px; color: #68766e; background: transparent; font-size: 11px; cursor: pointer; }
 	.tabs button.active { color: #425b2e; background: #e1ead5; font-weight: 700; }
 	.app-error { display: flex; justify-content: space-between; gap: 10px; padding: 9px 16px; background: #fff0e8; color: #8f4635; font: 12px Inter, sans-serif; }
 	.app-error button { border: 0; background: transparent; color: inherit; font-size: 18px; }
+	@media (max-width: 560px) { nav { align-items: flex-start; flex-wrap: wrap; } .nav-actions { width: 100%; justify-content: space-between; } }
 </style>

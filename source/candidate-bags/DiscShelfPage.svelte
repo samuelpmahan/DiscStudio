@@ -59,7 +59,7 @@
 	function selectDisc(discId: string) {
 		localDiscId = discId;
 		onSelectDisc?.(discId);
-		message = 'Shelf selection is view-only.';
+		message = 'Disc selected. Edit its details in the inspector.';
 		error = '';
 	}
 
@@ -117,7 +117,7 @@
 		error = '';
 		try {
 			onCreateDisc(await readPhoto(file));
-			message = 'Disc added. Add the facts you know below.';
+			message = 'Disc added. Add details in the inspector.';
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Disc photo could not be added.';
 		} finally {
@@ -161,9 +161,9 @@
 
 <div class="shelf-page">
 		<header class="topbar">
-		<div class="brand"><span class="mark" aria-hidden="true">◎</span><strong>CHAINSPOT</strong><span class="divider"></span><span>DISC SHELF</span><small>PROVISIONAL</small></div>
+		<div class="brand"><span class="mark" aria-hidden="true">◎</span><strong>CHAINSPOT</strong><span class="divider"></span><span>DISC SHELF</span><small>LOCAL</small></div>
 		<div class="top-note">Your physical shelf, organized your way.</div>
-			<div class="top-actions"><span class="local-dot">LOCAL SHELF</span><button class="build" onclick={() => document.getElementById('new-bag-name')?.focus()}>＋ Build MyBag</button></div>
+			<div class="top-actions"><span class="local-dot">LOCAL SHELF</span><button class="build" onclick={() => document.getElementById('new-bag-name')?.focus()}>＋ Build a bag</button></div>
 	</header>
 
 	{#if error}<div class="notice error" role="alert"><span>{error}</span><button onclick={() => (error = '')} aria-label="Dismiss error">×</button></div>{/if}
@@ -173,7 +173,7 @@
 		<aside class="left-column" aria-label="Disc shelf and bags">
 			<section class="panel shelf-panel">
 				<span class="eyebrow">YOUR PHYSICAL SHELF</span>
-					<div class="title-row"><div><h1>Disc shelf <span>{discs.length}</span></h1><p class="subtle">Every entry is one physical disc. A disc can live in more than one bag.</p></div><button class="add-disc" onclick={() => photoInput?.click()} disabled={photoBusy}>{photoBusy ? 'Adding…' : '＋ Add disc'}</button></div>
+					<div class="title-row"><div><h1>Disc shelf <span>{discs.length}</span></h1><p class="subtle">Every entry is one physical disc. A disc can live in more than one bag.</p></div><button class="add-disc" onclick={() => photoInput?.click()} disabled={photoBusy}>{photoBusy ? 'Adding…' : '＋ Add disc photo'}</button></div>
 					<input class="hidden" type="file" accept="image/jpeg,image/png,image/webp" bind:this={photoInput} onchange={addDiscFromPhoto} aria-label="Photo for new disc" />
 				<label class="search"><span aria-hidden="true">⌕</span><input bind:value={query} aria-label="Search disc shelf" placeholder="Find a disc…" /></label>
 				<div class="disc-list">
@@ -188,14 +188,14 @@
 			</section>
 
 			<section class="panel bags-panel" aria-label="Disc bags">
-				<div class="section-heading"><div><span class="eyebrow">REUSABLE GROUPS</span><h2>MyBags</h2></div><span class="tag">{bags.length}</span></div>
+				<div class="section-heading"><div><span class="eyebrow">REUSABLE GROUPS</span><h2>My bags</h2></div><span class="tag">{bags.length}</span></div>
 				<button class="bag-row" class:selected={activeBagId === null} aria-pressed={activeBagId === null} onclick={() => selectBag(null)}><span class="bag-icon">⌂</span><span><strong>All shelf discs</strong><small>{discs.length} physical discs</small></span></button>
 				{#each bags as bag (bag.id)}
 					{@const missing = missingFor(bag)}
-					<button class="bag-row" class:selected={activeBagId === bag.id} aria-pressed={activeBagId === bag.id} onclick={() => selectBag(bag.id)}><span class="bag-icon">▱</span><span><strong>{bag.name}</strong><small>{bag.discIds.length} memberships</small>{#if missing.length}<em>⚠ {missing.length} missing reference{missing.length === 1 ? '' : 's'}</em>{/if}</span></button>
+					<button class="bag-row" class:selected={activeBagId === bag.id} aria-pressed={activeBagId === bag.id} onclick={() => selectBag(bag.id)}><span class="bag-icon">▱</span><span><strong>{bag.name}</strong><small>{bag.discIds.length} {bag.discIds.length === 1 ? 'disc' : 'discs'}</small>{#if missing.length}<em>⚠ {missing.length} missing disc{missing.length === 1 ? '' : 's'}</em>{/if}</span></button>
 				{/each}
 				<form class="new-bag" onsubmit={(event) => { event.preventDefault(); buildBag(); }}><label for="new-bag-name">Build a bag</label><div><input id="new-bag-name" bind:value={newBagName} maxlength="100" placeholder="e.g. Saturday round" /><button type="submit" aria-label="Create bag">＋</button></div></form>
-				<p class="panel-note">Bags remember memberships by Disc ID. They never copy or delete shelf discs.</p>
+				<p class="panel-note">A disc can be in more than one bag. Your shelf stays intact.</p>
 			</section>
 		</aside>
 
@@ -217,15 +217,15 @@
 						<div class="inspector-heading"><h2>{selectedDisc.mold || 'Untitled disc'}</h2><span class="tag">EDITABLE</span></div>
 						<div class="inspector-photo">{#if selectedDisc.image}<img src={selectedDisc.image.src} alt={selectedDisc.image.alt || `${selectedDisc.mold} photo`} />{:else}<span aria-hidden="true">◎</span>{/if}</div>
 						<input class="hidden" type="file" accept="image/jpeg,image/png,image/webp" bind:this={replacePhotoInput} onchange={replacePhoto} aria-label="Replace disc photo" />
-						<button class="outline full" onclick={() => replacePhotoInput?.click()} disabled={photoBusy}>{photoBusy ? 'Preparing photo…' : selectedDisc.image ? 'Replace photo' : 'Add photo'}</button>
+						<button class="outline full" onclick={() => replacePhotoInput?.click()} disabled={photoBusy}>{photoBusy ? 'Preparing photo…' : selectedDisc.image ? 'Replace disc photo' : 'Add disc photo'}</button>
 						{#if selectedDisc.image}<button class="text-button full" onclick={() => updateFact({ image: null })}>Remove photo</button>{/if}
-						<div class="facts-form"><label>Manufacturer<input value={selectedDisc.manufacturer} oninput={(event) => updateFact({ manufacturer: event.currentTarget.value })} /></label><label>Mold / disc name<input value={selectedDisc.mold} oninput={(event) => updateFact({ mold: event.currentTarget.value })} /></label><label>Specimen details<input value={selectedDisc.variant} oninput={(event) => updateFact({ variant: event.currentTarget.value })} /></label><div class="flight-inputs">{#each ['speed', 'glide', 'turn', 'fade'] as key}<label>{key}<input type="number" step="any" value={selectedDisc.flight?.[key as keyof FlightNumbers] ?? ''} oninput={(event) => updateFlight(key as keyof FlightNumbers, event.currentTarget.value)} /></label>{/each}</div></div>
+						<div class="facts-form"><label for="manufacturer">Manufacturer<input id="manufacturer" autocomplete="organization" value={selectedDisc.manufacturer} oninput={(event) => updateFact({ manufacturer: event.currentTarget.value })} /></label><label for="mold">Mold / disc name<input id="mold" autocomplete="off" value={selectedDisc.mold} oninput={(event) => updateFact({ mold: event.currentTarget.value })} /></label><label for="variant">Specimen details<input id="variant" autocomplete="off" value={selectedDisc.variant} oninput={(event) => updateFact({ variant: event.currentTarget.value })} /></label><fieldset class="flight-fields"><legend>Flight numbers</legend><div class="flight-inputs">{#each ['speed', 'glide', 'turn', 'fade'] as key}<label for={`flight-${key}`}>{key}<input id={`flight-${key}`} type="number" step="any" value={selectedDisc.flight?.[key as keyof FlightNumbers] ?? ''} oninput={(event) => updateFlight(key as keyof FlightNumbers, event.currentTarget.value)} /></label>{/each}</div></fieldset></div>
 						<p class="hint">Photos stay in this browser. Crop and recognition are not included.</p>
 				{:else}<div class="empty"><strong>Choose a disc</strong><p>The inspector follows shelf selection.</p></div>{/if}
 			</section>
 			<section class="panel membership-panel"><div class="section-heading"><div><span class="eyebrow">BAG MEMBERSHIP</span><h2>Place this disc</h2></div><span class="tag">{selectedDisc ? 'EDIT' : '—'}</span></div>
 				{#if selectedDisc}{#each bags as bag (bag.id)}<button class="membership" class:member={bagContains(bag, selectedDisc.id)} onclick={() => toggleMembership(bag)} aria-pressed={bagContains(bag, selectedDisc.id)}><span>{bagContains(bag, selectedDisc.id) ? '✓' : '+'}</span><strong>{bag.name}</strong><small>{bagContains(bag, selectedDisc.id) ? 'In this bag' : 'Add to bag'}</small></button>{/each}{#if bags.length === 0}<p class="empty">Build your first bag on the left.</p>{/if}{:else}<p class="empty">Select a physical disc to manage its bag memberships.</p>{/if}
-				<p class="panel-note">Membership changes keep the same physical Disc ID. They never clone or remove shelf data.</p>
+				<p class="panel-note">A disc can be in several bags at once. Removing it here leaves the shelf untouched.</p>
 			</section>
 		</aside>
 	</div>
@@ -266,7 +266,7 @@
 	.title-row, .section-heading, .center-heading, .inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 	.title-row { margin-top: 8px; align-items: center; }
 	.title-row > div { min-width: 0; }
-	.add-disc { flex: 0 0 auto; border: 1px solid #70915e; border-radius: 7px; padding: 8px 9px; color: #425b2e; background: #e5eedb; font-size: 10px; }
+	.add-disc { flex: 0 0 auto; border: 1px solid #70915e; border-radius: 7px; padding: 8px 9px; color: #425b2e; background: #e5eedb; font-size: 10px; white-space: nowrap; }
 	.title-row h1 span { color: #6e8d45; font: 11px ui-monospace, monospace; }
 	.subtle, .center-heading p, .panel-note { color: #68766e; font-size: 11px; line-height: 1.5; }
 	.subtle { margin-top: 6px; }
@@ -318,6 +318,8 @@
 	.text-button:hover { color: #2e4937; text-decoration: underline; }
 	.full { width: 100%; }
 	.facts-form { display: grid; gap: 8px; margin-top: 14px; }
+	.flight-fields { min-width: 0; margin: 2px 0 0; padding: 0; border: 0; }
+	.flight-fields legend { padding: 0; color: #84948b; font: 9px ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
 	.facts-form label, .flight-inputs label { display: grid; gap: 4px; color: #84948b; font: 9px ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
 	.facts-form input { width: 100%; border: 1px solid #d5cdbf; border-radius: 6px; padding: 7px 8px; color: #243b2d; background: #fffef9; font: 11px Inter, sans-serif; }
 	.flight-inputs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
@@ -332,4 +334,5 @@
 	.membership small { color: #68766e; font-size: 9px; }
 	@media (max-width: 1120px) { .columns { grid-template-columns: 235px minmax(0, 1fr); } .right-column { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; border-left: 0; border-top: 1px solid #d8d1c4; } }
 	@media (max-width: 720px) { .topbar { flex-wrap: wrap; } .top-note { order: 3; width: 100%; margin: 0; } .columns { display: block; } .left-column, .right-column { border: 0; border-bottom: 1px solid #d8d1c4; } .right-column { display: grid; grid-template-columns: 1fr; } .center-column { padding: 22px 13px 35px; } .card-grid { grid-template-columns: 1fr; } }
+	@media (max-width: 420px) { .title-row { align-items: stretch; flex-direction: column; } .add-disc { width: 100%; } .top-actions { width: 100%; justify-content: space-between; } }
 </style>
