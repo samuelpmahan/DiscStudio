@@ -7,18 +7,23 @@
 		parseBagState,
 		serializeBagState,
 		toggleDiscMembership,
-		type BagState
+		createBattleSnapshot,
+		parseBattleSnapshotState,
+		serializeBattleSnapshotState,
+		type BagState,
+		type BattleSnapshotState
 	} from '../candidate-bags/model';
 	import { OnTheCourse, type CourseScene, type CourseView } from '../candidate-ui';
 	import { createSampleWorkspace } from '../disc-studio/samples';
-	import { parseWorkspace, type Workspace } from '../disc-studio/model';
-	import { exportCoursePng, renderCourseScene } from './course-renderer.js';
+	import { newId, parseWorkspace, type Disc, type Workspace } from '../disc-studio/model';
+	import { exportCoursePng, renderBattleSnapshotScene, renderCourseScene } from './course-renderer.js';
 
 	type Page = 'shelf' | 'course';
 	const workspaceKey = 'chainspot.disc-studio.candidate.v1';
 	const bagsKey = 'chainspot.disc-studio.candidate.bags.v1';
 	const navigationKey = 'chainspot.disc-studio.candidate.navigation.v1';
 	const coursePrefsKey = 'chainspot.disc-studio.candidate.course-prefs.v1';
+	const battleStatesKey = 'chainspot.disc-studio.candidate.battle-states.v1';
 	let workspace = $state<Workspace>(createSampleWorkspace());
 	let bagState = $state<BagState>({ version: BAG_VERSION, bags: [] });
 	let page = $state<Page>('shelf');
@@ -27,6 +32,7 @@
 	let ready = $state(false);
 	let error = $state('');
 	let courseView = $state<Partial<CourseView>>({});
+	let battleState = $state<BattleSnapshotState>({ version: 1, snapshots: [] });
 
 	onMount(() => {
 		try {
@@ -37,6 +43,10 @@
 				? parseBagState(storedBags, workspace.discs)
 				: { version: BAG_VERSION, bags: [createBag('bag-starter', 'Saturday round', workspace.discs.slice(0, 3).map((disc) => disc.id))] };
 			page = localStorage.getItem(navigationKey) === 'course' ? 'course' : 'shelf';
+			const storedBattleStates = localStorage.getItem(battleStatesKey);
+			battleState = storedBattleStates
+				? parseBattleSnapshotState(storedBattleStates, workspace.discs)
+				: { version: 1, snapshots: [createBattleSnapshot('state-starter', workspace.battle.entries, null)] };
 			const storedCourseView = localStorage.getItem(coursePrefsKey);
 			if (storedCourseView) courseView = JSON.parse(storedCourseView);
 		} catch (cause) {
@@ -55,6 +65,7 @@
 			localStorage.setItem(bagsKey, serializeBagState(bagState, workspace.discs));
 			localStorage.setItem(navigationKey, page);
 			localStorage.setItem(coursePrefsKey, JSON.stringify(courseView));
+			localStorage.setItem(battleStatesKey, serializeBattleSnapshotState(battleState, workspace.discs));
 		} catch (cause) {
 			error = `Candidate changes are session-only: ${(cause as Error).message}`;
 		}
@@ -74,12 +85,29 @@
 		bagState = toggleDiscMembership(bagState, bagId, discId, member, workspace.discs);
 	}
 
+	function createDisc(image: Disc['image']) {
+		const disc: Disc = {
+			id: newId('disc'), manufacturer: '', mold: '', variant: '', image,
+			flight: { speed: null, glide: null, turn: null, fade: null }
+		};
+		workspace = { ...workspace, discs: [...workspace.discs, disc] };
+		selectedDiscId = disc.id;
+	}
+
+	function updateDisc(discId: string, patch: Partial<Disc>) {
+		workspace = { ...workspace, discs: workspace.discs.map((disc) => disc.id === discId ? { ...disc, ...patch } : disc) };
+	}
+
 	function renderScene(current: Workspace, view: CourseView): CourseScene {
 		return renderCourseScene(current, view);
 	}
 
 	function exportPng(scene: CourseScene): Promise<Blob> {
 		return exportCoursePng(scene);
+	}
+
+	function setBattleState(next: BattleSnapshotState) {
+		battleState = next;
 	}
 </script>
 
@@ -102,13 +130,18 @@
 			onSelectBag={(id) => (selectedBagId = id)}
 			onCreateBag={addBag}
 			onToggleMembership={toggleMembership}
+			onCreateDisc={createDisc}
+			onUpdateDisc={updateDisc}
 		/>
 	{:else}
 		<OnTheCourse
 			{workspace}
 			{renderScene}
+			renderSnapshotScene={renderBattleSnapshotScene}
 			{exportPng}
 			initialView={courseView}
+			battleState={battleState}
+			onBattleStateChange={setBattleState}
 			onViewChange={(view) => (courseView = view)}
 		/>
 	{/if}

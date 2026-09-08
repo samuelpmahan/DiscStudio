@@ -1,10 +1,49 @@
 // @ts-check
 import { discCard } from '../../public/concept-a/render.js';
 import { adaptDisc, pngFromCandidateScene, renderCandidateScene } from '../candidate-adapter/renderer.js';
+import { runCandidateBattle } from '../candidate-pxc/index.js';
 
 const WIDTH = 1920;
 const HEIGHT = 1080;
 const GAP = 14;
+
+/** Deterministic non-cryptographic identifier for render projections; it is not a content-security hash. */
+function stableId(value) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++) hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+function canonicalView(view) {
+  return { mode: view.mode, theme: view.theme, anchor: view.anchor, scale: view.scale, cardLayout: view.cardLayout, battleLayout: view.battleLayout, showInstanceLabel: view.showInstanceLabel, showFlightNumbers: view.showFlightNumbers, cardDiscId: view.cardDiscId };
+}
+
+/**
+ * Run snapshot semantics through the candidate PCR, then project its frozen overlay model with View Args.
+ * The PQL run does not receive View Args and this function does not write a PNG; export attaches bytes later.
+ * @param {import('../disc-studio/model').Workspace} workspace
+ * @param {{id:string, entries:Array<{id:string,discId:string,score:number}>, highlightedEntryId:string|null,winnerEntryIds:string[]}} snapshot
+ * @param {import('../candidate-ui/OnTheCourse.svelte').CourseView} view
+ */
+export function renderBattleSnapshotScene(workspace, snapshot, view) {
+  const runInput = { shelf: workspace.discs, snapshot };
+  const runIdentity = stableId(runInput);
+  const { pxc, run, cache } = runCandidateBattle(runInput, { queryId: `candidate-battle:${snapshot.id}`, sourceId: runIdentity, executionId: runIdentity });
+  // This is the PQL-produced Part. Rendering never reads the authored snapshot directly.
+  const materialized = pxc.get('px.candidate.battle.part.materialized');
+  if (materialized.entries.some((entry) => !entry.disc)) return { svg: '', cardCount: 0, blocked: 'Selected battle state references a missing shelf disc.' };
+  const semanticWorkspace = {
+    ...workspace,
+    discs: materialized.entries.map((entry) => entry.disc),
+    battle: { ...workspace.battle, entries: materialized.entries.map(({ id, discId, score }) => ({ id, discId, score })) },
+    battleVisual: materialized.battleVisual
+  };
+  const scene = renderCourseScene(semanticWorkspace, view);
+  if (scene.blocked) return scene;
+  const viewId = stableId(canonicalView(view));
+  return { ...scene, materialization: { pqlResultId: runIdentity, viewId, svgId: stableId(scene.svg), pcr: run.PrincipleComponentRender, cache: { hit: cache.hit, computedParts: cache.computedParts, reusedParts: cache.reusedParts } } };
+}
+
 
 /**
  * Project B workspace facts through A's card primitive using explicit course view settings.

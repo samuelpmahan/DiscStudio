@@ -191,7 +191,7 @@
 				{#each visibleDiscs as disc (disc.id)}
 					<button class="shelf-item" class:chosen={selectedDiscId === disc.id} aria-pressed={selectedDiscId === disc.id} onclick={() => selectDisc(disc.id)}>
 						<div class="thumb">{#if cardImage(disc)}<img src={cardImage(disc)} alt={disc.image?.alt ?? `${disc.mold} photo`} />{:else}<span aria-hidden="true">◎</span>{/if}</div>
-						<div class="shelf-copy"><small>{disc.manufacturer || 'MANUFACTURER'}</small><strong>{disc.mold || 'Untitled disc'}</strong><span>{disc.variant || 'No variant'}</span><code>{flightKeys.map((key) => formatNumber(disc.flight[key])).join(' / ')}</code></div>
+						<div class="shelf-copy"><small>{disc.manufacturer || 'MANUFACTURER'}</small><strong>{disc.mold || 'Untitled disc'}</strong><span>{disc.variant || 'No variant'}</span><code>{flightKeys.map((key) => formatNumber(disc.flight?.[key])).join(' / ')}</code></div>
 						{#if disc.image}<span class="photo-dot" title="Embedded image source" aria-label="Has embedded image"></span>{/if}
 					</button>
 				{/each}
@@ -244,7 +244,7 @@
 
 		<aside class="inspector panel" aria-label="Candidate inspector">
 			<div class="eyebrow">VIEW-ONLY INSPECTOR</div><div class="panel-title"><h2>{selectedDisc?.mold || 'Disc details'}</h2><span class="candidate-tag">B FACTS</span></div>
-			{#if selectedDisc}<div class="inspector-photo">{#if cardImage(selectedDisc)}<img src={cardImage(selectedDisc)} alt={selectedDisc.image?.alt ?? selectedDisc.mold} />{:else}<span aria-hidden="true">◎</span>{/if}</div><dl><div><dt>Manufacturer</dt><dd>{selectedDisc.manufacturer || '—'}</dd></div><div><dt>Mold</dt><dd>{selectedDisc.mold || '—'}</dd></div><div><dt>Variant</dt><dd>{selectedDisc.variant || '—'}</dd></div><div><dt>Flight</dt><dd>{flightKeys.map((key) => `${key} ${formatNumber(selectedDisc.flight[key])}`).join(' · ')}</dd></div></dl>{:else}<p class="empty">Choose a shelf disc to inspect its B facts.</p>{/if}
+			{#if selectedDisc}<div class="inspector-photo">{#if cardImage(selectedDisc)}<img src={cardImage(selectedDisc)} alt={selectedDisc.image?.alt ?? selectedDisc.mold} />{:else}<span aria-hidden="true">◎</span>{/if}</div><dl><div><dt>Manufacturer</dt><dd>{selectedDisc.manufacturer || '—'}</dd></div><div><dt>Mold</dt><dd>{selectedDisc.mold || '—'}</dd></div><div><dt>Variant</dt><dd>{selectedDisc.variant || '—'}</dd></div><div><dt>Flight</dt><dd>{flightKeys.map((key) => `${key} ${formatNumber(selectedDisc.flight?.[key])}`).join(' · ')}</dd></div></dl>{:else}<p class="empty">Choose a shelf disc to inspect its B facts.</p>{/if}
 			{#if selectedEntry}<div class="selected-entry"><span class="eyebrow">SELECTED ENTRY · EDITOR ONLY</span><strong>{selectedEntry.id}</strong><span>score {formatNumber(selectedEntry.score)}</span></div>{/if}
 			<p class="view-only-note">Selection and highlight are shown for inspection. The export reads authored visual state and never uses <code>selectedEntryId</code>.</p>
 		</aside>

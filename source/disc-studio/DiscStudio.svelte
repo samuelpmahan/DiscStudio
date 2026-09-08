@@ -346,7 +346,7 @@
 							<small>{disc.manufacturer || 'NEW DISC'}</small><strong
 								>{disc.mold || 'Untitled disc'}</strong
 							><span>{disc.variant || 'Add specimen details'}</span><code
-								>{flightKeys.map((k) => formatNumber(disc.flight[k])).join(' / ')}</code
+								>{flightKeys.map((k) => formatNumber(disc.flight?.[k])).join(' / ')}</code
 							>
 						</div>
 						{#if disc.image}<span
@@ -680,13 +680,13 @@
 									type="number"
 									step="any"
 									aria-label={`Flight ${key}`}
-									value={selectedDisc.flight[key] ?? ''}
+									value={selectedDisc.flight?.[key] ?? ''}
 									placeholder="—"
 									oninput={(e) => {
 										if (!selectedDisc) return;
 										const v = e.currentTarget.value === '' ? null : e.currentTarget.valueAsNumber;
 										if (v === null || Number.isFinite(v))
-											updateDisc({ flight: { ...selectedDisc.flight, [key]: v } });
+											updateDisc({ flight: { ...(selectedDisc.flight ?? {}), [key]: v } });
 									}}
 								/></label
 							>{/each}

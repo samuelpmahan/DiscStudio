@@ -33,14 +33,14 @@ const CARD_GAP = 14;
 export function adaptDisc(disc) {
   if (!disc || typeof disc !== 'object') throw new TypeError('A Concept B disc is required.');
   const flight = disc.flight;
-  if (!flight || typeof flight !== 'object') throw new TypeError('A Concept B disc must include flight numbers.');
+  if (flight !== undefined && (!flight || typeof flight !== 'object')) throw new TypeError('Concept B flight must be an object when supplied.');
   // Concept A's text primitive renders null as an empty string. Materialize
   // B's null semantics here so the exported card visibly shows an em dash.
-  const orderedFlight = [flight.speed, flight.glide, flight.turn, flight.fade].map((value) =>
-    value === null ? '—' : value
+  const orderedFlight = [flight?.speed, flight?.glide, flight?.turn, flight?.fade].map((value) =>
+    value == null ? '—' : value
   );
   if (orderedFlight.some((value) => value !== '—' && (typeof value !== 'number' || !Number.isFinite(value)))) {
-    throw new TypeError('Concept B flight numbers must be finite numbers or null.');
+    throw new TypeError('Concept B flight numbers must be finite numbers, null, or absent.');
   }
   if (disc.image !== null && (!disc.image || typeof disc.image.src !== 'string')) {
     throw new TypeError('Concept B image must be null or contain a string src.');

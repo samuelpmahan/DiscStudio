@@ -8,6 +8,11 @@ import {
   parseBagState,
   removeDiscFromBag,
   serializeBagState,
+  createBattleSnapshot,
+  duplicateBattleSnapshot,
+  updateBattleSnapshot,
+  reorderBattleSnapshots,
+  validateBattleSnapshotState,
   toggleDiscMembership,
   validateBagState
 } from '../../source/candidate-bags/model.ts';
@@ -89,4 +94,38 @@ test('rejects duplicate bag IDs and duplicate memberships', () => {
   assert.throws(() => validateBagState({ version: 1, bags: [
     { id: 'bag-a', name: 'A', discIds: ['disc-1', 'disc-1'] }
   ] }, shelf), /duplicate disc membership/);
+});
+
+test('battle snapshots are complete immutable ordered states with physical disc references', () => {
+  const first = createBattleSnapshot('state-1', [
+    { id: 'entry-1', discId: 'disc-1', score: 8 },
+    { id: 'entry-2', discId: 'disc-2', score: 6 }
+  ], 'data:image/png;base64,AA==');
+  const authored = updateBattleSnapshot({ version: 1, snapshots: [first] }, 'state-1', {
+    highlightedEntryId: 'entry-1', winnerEntryIds: ['entry-1']
+  });
+  const copied = duplicateBattleSnapshot(authored, 'state-1', 'state-2');
+  const edited = updateBattleSnapshot(copied, 'state-2', { entries: [{ id: 'entry-2', discId: 'disc-2', score: 10 }, { id: 'entry-1', discId: 'disc-1', score: 8 }] });
+  assert.deepEqual(authored.snapshots[0].entries.map((entry) => entry.score), [8, 6]);
+  assert.deepEqual(edited.snapshots[1].entries.map((entry) => entry.discId), ['disc-2', 'disc-1']);
+  assert.equal(edited.snapshots[0].imageExport, 'data:image/png;base64,AA==');
+  assert.deepEqual(reorderBattleSnapshots(edited, 'state-2', -1).snapshots.map((snapshot) => snapshot.id), ['state-2', 'state-1']);
+  assert.throws(() => validateBattleSnapshotState({ version: 1, snapshots: [{ ...first, highlightedEntryId: 'missing' }] }, shelf), /highlight references/);
+});
+
+test('authoring edits fork a new full snapshot and entry reorder preserves the prior state', async () => {
+  const { forkBattleSnapshot, reorderBattleSnapshotEntries } = await import('../../source/candidate-bags/model.ts');
+  const first = createBattleSnapshot('state-1', [
+    { id: 'entry-1', discId: 'disc-1', score: 8 },
+    { id: 'entry-2', discId: 'disc-2', score: 6 }
+  ]);
+  const base = { version: 1, snapshots: [first] };
+  const edited = forkBattleSnapshot(base, 'state-1', 'state-2', { highlightedEntryId: 'entry-2', winnerEntryIds: ['entry-2'], entries: [{ ...first.entries[0], score: 9 }, { ...first.entries[1] }] }, shelf);
+  assert.equal(edited.snapshots.length, 2);
+  assert.equal(base.snapshots[0].entries[0].score, 8);
+  assert.equal(base.snapshots[0].highlightedEntryId, null);
+  const reordered = reorderBattleSnapshotEntries(edited, 'state-2', 'entry-2', -1, shelf);
+  assert.deepEqual(edited.snapshots[1].entries.map((entry) => entry.id), ['entry-1', 'entry-2']);
+  assert.deepEqual(reordered.snapshots[2].entries.map((entry) => entry.id), ['entry-2', 'entry-1']);
+  assert.deepEqual(reordered.snapshots[1].entries.map((entry) => entry.id), ['entry-1', 'entry-2']);
 });

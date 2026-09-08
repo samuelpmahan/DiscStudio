@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DiscCard from '../disc-studio/DiscCard.svelte';
-	import { defaultAppearance, neutralCard, type Disc } from '../disc-studio/model';
+	import { readPhoto } from '../disc-studio/localDraft';
+	import { defaultAppearance, neutralCard, type Disc, type FlightNumbers } from '../disc-studio/model';
 	import { bagContains, missingDiscIds, type Bag } from './model';
 
 	export type DiscShelfPageProps = {
@@ -12,6 +13,8 @@
 		onSelectBag?: (bagId: string | null) => void;
 		onCreateBag?: (name: string) => void;
 		onToggleMembership?: (bagId: string, discId: string, member: boolean) => void;
+		onCreateDisc?: (image: Disc['image']) => void;
+		onUpdateDisc?: (discId: string, patch: Partial<Disc>) => void;
 	};
 
 	let {
@@ -22,7 +25,9 @@
 		onSelectDisc,
 		onSelectBag,
 		onCreateBag,
-		onToggleMembership
+		onToggleMembership,
+		onCreateDisc,
+		onUpdateDisc
 	}: DiscShelfPageProps = $props();
 
 	let localDiscId = $state<string | null>(null);
@@ -31,6 +36,9 @@
 	let newBagName = $state('');
 	let message = $state('');
 	let error = $state('');
+	let photoInput = $state<HTMLInputElement>();
+	let replacePhotoInput = $state<HTMLInputElement>();
+	let photoBusy = $state(false);
 
 	const shelfAppearance = { ...defaultAppearance, theme: 'paper' as const, layout: 'showcase' as const, imageFit: 'contain' as const };
 	let activeDiscId = $derived(selectedDiscId !== undefined ? selectedDiscId : localDiscId ?? discs[0]?.id ?? null);
@@ -99,6 +107,51 @@
 	function missingFor(bag: Bag): string[] {
 		return missingDiscIds(bag, discs);
 	}
+
+	async function addDiscFromPhoto(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !onCreateDisc) return;
+		photoBusy = true;
+		error = '';
+		try {
+			onCreateDisc(await readPhoto(file));
+			message = 'Disc added. Add the facts you know below.';
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Disc photo could not be added.';
+		} finally {
+			photoBusy = false;
+		}
+	}
+
+	async function replacePhoto(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !selectedDisc || !onUpdateDisc) return;
+		photoBusy = true;
+		error = '';
+		try {
+			onUpdateDisc(selectedDisc.id, { image: await readPhoto(file) });
+			message = 'Disc photo replaced.';
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'Disc photo could not be replaced.';
+		} finally {
+			photoBusy = false;
+		}
+	}
+
+	function updateFact(patch: Partial<Disc>) {
+		if (selectedDisc && onUpdateDisc) onUpdateDisc(selectedDisc.id, patch);
+	}
+
+	function updateFlight(key: keyof FlightNumbers, value: string) {
+		if (!selectedDisc) return;
+		const next = { ...(selectedDisc.flight ?? {}) } as Partial<FlightNumbers>;
+		next[key] = value === '' ? null : Number(value);
+		updateFact({ flight: next });
+	}
 </script>
 
 <svelte:head>
@@ -107,10 +160,10 @@
 </svelte:head>
 
 <div class="shelf-page">
-	<header class="topbar">
+		<header class="topbar">
 		<div class="brand"><span class="mark" aria-hidden="true">◎</span><strong>CHAINSPOT</strong><span class="divider"></span><span>DISC SHELF</span><small>PROVISIONAL</small></div>
 		<div class="top-note">Your physical shelf, organized your way.</div>
-		<div class="top-actions"><span class="local-dot">LOCAL SHELF</span><button class="build" onclick={() => document.getElementById('new-bag-name')?.focus()}>＋ Build MyBag</button></div>
+			<div class="top-actions"><span class="local-dot">LOCAL SHELF</span><button class="build" onclick={() => document.getElementById('new-bag-name')?.focus()}>＋ Build MyBag</button></div>
 	</header>
 
 	{#if error}<div class="notice error" role="alert"><span>{error}</span><button onclick={() => (error = '')} aria-label="Dismiss error">×</button></div>{/if}
@@ -120,8 +173,8 @@
 		<aside class="left-column" aria-label="Disc shelf and bags">
 			<section class="panel shelf-panel">
 				<span class="eyebrow">YOUR PHYSICAL SHELF</span>
-				<div class="title-row"><h1>Disc shelf <span>{discs.length}</span></h1><span class="tag">B FACTS</span></div>
-				<p class="subtle">Every entry is one physical disc. A disc can live in more than one bag.</p>
+					<div class="title-row"><div><h1>Disc shelf <span>{discs.length}</span></h1><p class="subtle">Every entry is one physical disc. A disc can live in more than one bag.</p></div><button class="add-disc" onclick={() => photoInput?.click()} disabled={photoBusy}>{photoBusy ? 'Adding…' : '＋ Add disc'}</button></div>
+					<input class="hidden" type="file" accept="image/jpeg,image/png,image/webp" bind:this={photoInput} onchange={addDiscFromPhoto} aria-label="Photo for new disc" />
 				<label class="search"><span aria-hidden="true">⌕</span><input bind:value={query} aria-label="Search disc shelf" placeholder="Find a disc…" /></label>
 				<div class="disc-list">
 					{#each filteredDiscs as disc (disc.id)}
@@ -159,11 +212,15 @@
 
 		<aside class="right-column" aria-label="Disc inspector">
 			<section class="panel inspector">
-				<span class="eyebrow">VIEW-ONLY INSPECTOR</span>
+					<span class="eyebrow">DISC DETAILS</span>
 				{#if selectedDisc}
-					<div class="inspector-heading"><h2>{selectedDisc.mold || 'Untitled disc'}</h2><span class="tag">B FACTS</span></div>
-					<div class="inspector-photo">{#if selectedDisc.image}<img src={selectedDisc.image.src} alt={selectedDisc.image.alt || `${selectedDisc.mold} photo`} />{:else}<span aria-hidden="true">◎</span>{/if}</div>
-					<dl><div><dt>Manufacturer</dt><dd>{selectedDisc.manufacturer || '—'}</dd></div><div><dt>Mold</dt><dd>{selectedDisc.mold || '—'}</dd></div><div><dt>Variant</dt><dd>{selectedDisc.variant || '—'}</dd></div><div><dt>Flight</dt><dd>{selectedDisc.flight.speed ?? '—'} / {selectedDisc.flight.glide ?? '—'} / {selectedDisc.flight.turn ?? '—'} / {selectedDisc.flight.fade ?? '—'}</dd></div></dl>
+						<div class="inspector-heading"><h2>{selectedDisc.mold || 'Untitled disc'}</h2><span class="tag">EDITABLE</span></div>
+						<div class="inspector-photo">{#if selectedDisc.image}<img src={selectedDisc.image.src} alt={selectedDisc.image.alt || `${selectedDisc.mold} photo`} />{:else}<span aria-hidden="true">◎</span>{/if}</div>
+						<input class="hidden" type="file" accept="image/jpeg,image/png,image/webp" bind:this={replacePhotoInput} onchange={replacePhoto} aria-label="Replace disc photo" />
+						<button class="outline full" onclick={() => replacePhotoInput?.click()} disabled={photoBusy}>{photoBusy ? 'Preparing photo…' : selectedDisc.image ? 'Replace photo' : 'Add photo'}</button>
+						{#if selectedDisc.image}<button class="text-button full" onclick={() => updateFact({ image: null })}>Remove photo</button>{/if}
+						<div class="facts-form"><label>Manufacturer<input value={selectedDisc.manufacturer} oninput={(event) => updateFact({ manufacturer: event.currentTarget.value })} /></label><label>Mold / disc name<input value={selectedDisc.mold} oninput={(event) => updateFact({ mold: event.currentTarget.value })} /></label><label>Specimen details<input value={selectedDisc.variant} oninput={(event) => updateFact({ variant: event.currentTarget.value })} /></label><div class="flight-inputs">{#each ['speed', 'glide', 'turn', 'fade'] as key}<label>{key}<input type="number" step="any" value={selectedDisc.flight?.[key as keyof FlightNumbers] ?? ''} oninput={(event) => updateFlight(key as keyof FlightNumbers, event.currentTarget.value)} /></label>{/each}</div></div>
+						<p class="hint">Photos stay in this browser. Crop and recognition are not included.</p>
 				{:else}<div class="empty"><strong>Choose a disc</strong><p>The inspector follows shelf selection.</p></div>{/if}
 			</section>
 			<section class="panel membership-panel"><div class="section-heading"><div><span class="eyebrow">BAG MEMBERSHIP</span><h2>Place this disc</h2></div><span class="tag">{selectedDisc ? 'EDIT' : '—'}</span></div>
@@ -208,6 +265,8 @@
 	h2 { font-size: 18px; letter-spacing: -.04em; }
 	.title-row, .section-heading, .center-heading, .inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 	.title-row { margin-top: 8px; align-items: center; }
+	.title-row > div { min-width: 0; }
+	.add-disc { flex: 0 0 auto; border: 1px solid #70915e; border-radius: 7px; padding: 8px 9px; color: #425b2e; background: #e5eedb; font-size: 10px; }
 	.title-row h1 span { color: #6e8d45; font: 11px ui-monospace, monospace; }
 	.subtle, .center-heading p, .panel-note { color: #68766e; font-size: 11px; line-height: 1.5; }
 	.subtle { margin-top: 6px; }
@@ -252,10 +311,18 @@
 	.inspector-heading { margin-top: 7px; align-items: center; }
 	.inspector-photo { display: grid; place-items: center; height: 174px; margin: 15px 0; overflow: hidden; border-radius: 9px; background: #e3ded3; color: #8c9b8f; font-size: 55px; }
 	.inspector-photo img { width: 100%; height: 100%; object-fit: contain; }
-	dl { display: grid; gap: 10px; margin: 0; }
-	dl div { display: grid; gap: 2px; }
-	dt { color: #84948b; font: 9px ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
-	dd { margin: 0; color: #243b2d; font-size: 11px; overflow-wrap: anywhere; }
+	.hidden { display: none; }
+	.outline { width: 100%; border: 1px solid #8aa176; border-radius: 6px; padding: 8px 10px; color: #425b2e; background: transparent; font-size: 10px; }
+	.outline:hover { background: #eaf1df; }
+	.text-button { border: 0; padding: 5px 0; color: #506544; background: transparent; font-size: 10px; text-align: left; }
+	.text-button:hover { color: #2e4937; text-decoration: underline; }
+	.full { width: 100%; }
+	.facts-form { display: grid; gap: 8px; margin-top: 14px; }
+	.facts-form label, .flight-inputs label { display: grid; gap: 4px; color: #84948b; font: 9px ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
+	.facts-form input { width: 100%; border: 1px solid #d5cdbf; border-radius: 6px; padding: 7px 8px; color: #243b2d; background: #fffef9; font: 11px Inter, sans-serif; }
+	.flight-inputs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+	.flight-inputs input { min-width: 0; }
+	.hint { margin-top: 9px; color: #68766e; font-size: 10px; line-height: 1.4; }
 	.membership-panel { display: grid; gap: 5px; }
 	.membership-panel h2 { margin-top: 4px; }
 	.membership { display: grid; grid-template-columns: 23px minmax(0, 1fr) auto; gap: 7px; align-items: center; padding: 8px; border: 1px solid transparent; border-radius: 7px; background: #f0ece3; color: #243b2d; text-align: left; }

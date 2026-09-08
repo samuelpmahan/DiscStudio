@@ -10,7 +10,8 @@ export type Disc = {
 	manufacturer: string;
 	mold: string;
 	variant: string;
-	flight: FlightNumbers;
+	/** Flight facts can be absent as a group; present fields may independently be unknown. */
+	flight?: Partial<FlightNumbers>;
 	// Actual local photo of this specimen; no catalog lookup, detection or user ownership required.
 	image: { src: string; alt: string } | null;
 };
@@ -90,8 +91,8 @@ export function deleteDisc(workspace: Workspace, discId: string): Workspace {
 		throw new Error('This disc is in the battle. Remove its entries first.');
 	return { ...workspace, discs: workspace.discs.filter((d) => d.id !== discId) };
 }
-export function formatNumber(value: number | null): string {
-	return value === null ? '—' : String(value).replace('-', '−');
+export function formatNumber(value: number | null | undefined): string {
+	return value == null ? '—' : String(value).replace('-', '−');
 }
 export function newId(prefix: string): string {
 	const id =
@@ -135,10 +136,16 @@ export function parseWorkspace(raw: string): Workspace {
 	if (x.discs.length > 100 || x.battle.entries.length > 4)
 		return fail('this probe supports up to 100 discs and 4 entries');
 	const discs: Disc[] = x.discs.map((d: any) => {
-		if (!d || !d.flight) return fail('disc');
-		const flight = Object.fromEntries(
-			flightKeys.map((k) => [k, d.flight[k] === null ? null : number(d.flight[k])])
-		) as FlightNumbers;
+		if (!d || typeof d !== 'object') return fail('disc');
+		const flightSource = d.flight;
+		if (flightSource !== undefined && (!flightSource || typeof flightSource !== 'object' || Array.isArray(flightSource))) return fail('flight');
+		const flight = flightSource === undefined ? undefined : Object.fromEntries(
+			flightKeys.flatMap((k) => {
+				if (!(k in flightSource)) return [];
+				const value = flightSource[k];
+				return [[k, value === null ? null : number(value)]];
+			})
+		) as Partial<FlightNumbers>;
 		let image: Disc['image'] = null;
 		if (d.image !== null) {
 			const src = text(d.image?.src, 'photo', 850_000);

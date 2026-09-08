@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import type { Disc, Workspace } from '../disc-studio/model';
+	import { duplicateBattleSnapshot, forkBattleSnapshot, reorderBattleSnapshotEntries, reorderBattleSnapshots, updateBattleSnapshot, type BattleSnapshotState } from '../candidate-bags/model';
 
 	export type CourseMode = 'card' | 'battle';
 	export type CourseTheme = 'dark' | 'light';
@@ -26,13 +27,17 @@
 	export type OnTheCourseProps = {
 		workspace: Workspace;
 		renderScene?: (workspace: Workspace, view: CourseView) => CourseScene;
+		renderSnapshotScene?: (workspace: Workspace, snapshot: BattleSnapshotState['snapshots'][number], view: CourseView) => CourseScene;
 		exportPng?: (scene: CourseScene) => Promise<Blob> | Blob;
 		onExportPng?: (detail: CoursePngExportDetail) => void;
 		initialView?: Partial<CourseView>;
 		onViewChange?: (view: CourseView) => void;
+		/** Optional ordered authored states. Each state is rendered from its own complete snapshot. */
+		battleState?: BattleSnapshotState;
+		onBattleStateChange?: (state: BattleSnapshotState) => void;
 	};
 
-	let { workspace, renderScene, exportPng: exportScenePng, onExportPng, initialView, onViewChange }: OnTheCourseProps = $props();
+	let { workspace, renderScene, renderSnapshotScene, exportPng: exportScenePng, onExportPng, initialView, onViewChange, battleState, onBattleStateChange }: OnTheCourseProps = $props();
 	const contextTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm'];
 	const defaultPrefs = {
 		mode: 'card' as CourseMode,
@@ -62,6 +67,7 @@
 	let contextKind = $state<'image' | 'video' | null>(null);
 	let hydrated = $state(false);
 	let exportBusy = $state(false);
+	let selectedSnapshotId = $state<string | null>(null);
 	let message = $state('');
 	let error = $state('');
 	let videoInput = $state<HTMLInputElement>();
@@ -70,6 +76,12 @@
 
 	let selectedDisc = $derived(workspace.discs.find((disc) => disc.id === selectedDiscId));
 	let selectedEntry = $derived(workspace.battle.entries.find((entry) => entry.id === selectedEntryId));
+	let activeSnapshot = $derived(battleState?.snapshots.find((snapshot) => snapshot.id === selectedSnapshotId) ?? battleState?.snapshots[0] ?? null);
+	let renderWorkspace = $derived(activeSnapshot && mode === 'battle' ? {
+		...workspace,
+		battle: { ...workspace.battle, entries: activeSnapshot.entries.map((entry) => ({ ...entry })) },
+		battleVisual: { highlightedEntryId: activeSnapshot.highlightedEntryId, emphasizedEntryIds: [...activeSnapshot.winnerEntryIds] }
+	} : workspace);
 	let view = $derived<CourseView>({
 		mode,
 		theme,
@@ -98,6 +110,7 @@
 		if (typeof supplied?.showFlightNumbers === 'boolean') showFlightNumbers = supplied.showFlightNumbers;
 		if (supplied?.cardDiscId && workspace.discs.some((disc) => disc.id === supplied.cardDiscId)) selectedDiscId = supplied.cardDiscId;
 		hydrated = true;
+		selectedSnapshotId = battleState?.snapshots[0]?.id ?? null;
 	});
 
 	$effect(() => {
@@ -107,9 +120,13 @@
 	onDestroy(() => revokeVideo());
 
 	function getScene(): CourseScene {
+		if (activeSnapshot && mode === 'battle' && activeSnapshot.entries.some((entry) => !workspace.discs.some((disc) => disc.id === entry.discId))) {
+			return { svg: '', cardCount: 0, blocked: 'Selected battle state references a missing shelf disc.' };
+		}
 		if (!renderScene) return { svg: '', cardCount: 0, blocked: 'Preview renderer is unavailable.' };
 		try {
-			return renderScene(workspace, view);
+			if (activeSnapshot && mode === 'battle' && renderSnapshotScene) return renderSnapshotScene(workspace, activeSnapshot, view);
+			return renderScene(renderWorkspace, view);
 		} catch (cause) {
 			return { svg: '', cardCount: 0, blocked: `Preview is unavailable: ${(cause as Error).message}` };
 		}
@@ -122,9 +139,68 @@
 
 	function inspectEntry(id: string) {
 		selectedEntryId = id;
-		const entry = workspace.battle.entries.find((item) => item.id === id);
+		const entry = activeSnapshot?.entries.find((item) => item.id === id) ?? workspace.battle.entries.find((item) => item.id === id);
 		if (entry) selectedDiscId = entry.discId;
-		message = 'Entry selection is view-only and is never passed to export.';
+	}
+
+	function chooseSnapshot(id: string) {
+		selectedSnapshotId = id;
+	}
+
+	function mutateSnapshot(mutator: (state: BattleSnapshotState) => BattleSnapshotState) {
+		if (!battleState || !activeSnapshot) return;
+		try { onBattleStateChange?.(mutator(battleState)); }
+		catch (cause) { error = cause instanceof Error ? cause.message : 'Battle state could not be changed.'; }
+	}
+
+	function duplicateSnapshot() {
+		if (!activeSnapshot) return;
+		const id = `${activeSnapshot.id}-copy-${Date.now().toString(36)}`;
+		mutateSnapshot((state) => duplicateBattleSnapshot(state, activeSnapshot.id, id));
+		selectedSnapshotId = id;
+	}
+
+	function moveSnapshot(offset: -1 | 1) { if (activeSnapshot) mutateSnapshot((state) => reorderBattleSnapshots(state, activeSnapshot.id, offset)); }
+
+	function editSnapshotEntry(entryId: string, change: 'score' | 'highlight' | 'winner' | 'up' | 'down', score?: number) {
+		if (!activeSnapshot) return;
+		const entry = activeSnapshot.entries.find((candidate) => candidate.id === entryId);
+		if (!entry) return;
+		const newId = `${activeSnapshot.id}-edit-${Date.now().toString(36)}`;
+		if (change === 'up' || change === 'down') mutateSnapshot((state) => reorderBattleSnapshotEntries(state, activeSnapshot.id, entryId, change === 'up' ? -1 : 1));
+		if (change === 'score' && score !== undefined && Number.isFinite(score)) mutateSnapshot((state) => forkBattleSnapshot(state, activeSnapshot.id, newId, { entries: activeSnapshot.entries.map((candidate) => candidate.id === entryId ? { ...candidate, score } : candidate) }));
+		if (change === 'highlight') mutateSnapshot((state) => forkBattleSnapshot(state, activeSnapshot.id, newId, { highlightedEntryId: activeSnapshot.highlightedEntryId === entryId ? null : entryId }));
+		if (change === 'winner') mutateSnapshot((state) => forkBattleSnapshot(state, activeSnapshot.id, newId, { winnerEntryIds: activeSnapshot.winnerEntryIds.includes(entryId) ? activeSnapshot.winnerEntryIds.filter((id) => id !== entryId) : [...activeSnapshot.winnerEntryIds, entryId] }));
+		if (change !== 'up' && change !== 'down') selectedSnapshotId = newId;
+	}
+
+	function addBattleEntry() {
+		if (!activeSnapshot || !selectedDiscId) return;
+		if (activeSnapshot.entries.some((entry) => entry.discId === selectedDiscId)) {
+			error = 'That disc is already in this battle.';
+			return;
+		}
+		const id = `${activeSnapshot.id}-entry-${Date.now().toString(36)}`;
+		const newSnapshotId = `${activeSnapshot.id}-edit-${Date.now().toString(36)}`;
+		mutateSnapshot((state) => forkBattleSnapshot(state, activeSnapshot.id, newSnapshotId, { entries: [...activeSnapshot.entries, { id, discId: selectedDiscId, score: 0 }] }));
+		selectedSnapshotId = newSnapshotId;
+		selectedEntryId = id;
+	}
+
+	function removeBattleEntry(entryId: string) {
+		if (!activeSnapshot) return;
+		const entries = activeSnapshot.entries.filter((entry) => entry.id !== entryId);
+		if (entries.length === activeSnapshot.entries.length) return;
+		const newSnapshotId = `${activeSnapshot.id}-edit-${Date.now().toString(36)}`;
+		const highlightedEntryId = activeSnapshot.highlightedEntryId === entryId ? null : activeSnapshot.highlightedEntryId;
+		const winnerEntryIds = activeSnapshot.winnerEntryIds.filter((id) => id !== entryId);
+		mutateSnapshot((state) => forkBattleSnapshot(state, activeSnapshot.id, newSnapshotId, { entries, highlightedEntryId, winnerEntryIds }));
+		selectedSnapshotId = newSnapshotId;
+		selectedEntryId = entries[0]?.id ?? null;
+	}
+
+	async function blobDataUrl(blob: Blob): Promise<string> {
+		return await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error ?? new Error('PNG could not be recorded.')); reader.readAsDataURL(blob); });
 	}
 
 	function revokeVideo() {
@@ -162,9 +238,13 @@
 		error = '';
 		try {
 			const blob = await exportScenePng(scene);
-			const filename = `chainspot-course-${mode}.png`;
+			const filename = `chainspot-course-${mode}${mode === 'battle' && activeSnapshot ? `-${activeSnapshot.id}` : ''}.png`;
 			const detail = { blob, filename, svg: scene.svg, view };
 			onExportPng?.(detail);
+			if (mode === 'battle' && activeSnapshot && battleState && onBattleStateChange) {
+				const imageExport = await blobDataUrl(blob);
+				onBattleStateChange(updateBattleSnapshot(battleState, activeSnapshot.id, { imageExport }));
+			}
 			const link = document.createElement('a');
 			link.href = URL.createObjectURL(blob);
 			link.download = filename;
@@ -173,6 +253,38 @@
 			message = 'Transparent PNG saved. Footage and editor selection are excluded.';
 		} catch (cause) {
 			error = (cause as Error).message;
+		} finally {
+			exportBusy = false;
+		}
+	}
+
+	async function exportAllSnapshots() {
+		if (!battleState || !exportScenePng || exportBusy || battleState.snapshots.length === 0) return;
+		exportBusy = true;
+		error = '';
+		let current = battleState;
+		let saved = 0;
+		const failures: string[] = [];
+		try {
+			for (const [index, snapshot] of battleState.snapshots.entries()) {
+				try {
+					const snapshotScene = renderSnapshotScene ? renderSnapshotScene(workspace, snapshot, view) : renderScene?.({ ...workspace, battle: { ...workspace.battle, entries: snapshot.entries.map((entry) => ({ ...entry })) } }, view);
+					if (!snapshotScene || snapshotScene.blocked || !snapshotScene.svg || snapshotScene.cardCount === 0) throw new Error(snapshotScene?.blocked ?? 'Nothing to export.');
+					const blob = await exportScenePng(snapshotScene);
+					const filename = `chainspot-course-battle-${String(index + 1).padStart(2, '0')}-${snapshot.id}.png`;
+					const link = document.createElement('a');
+					link.href = URL.createObjectURL(blob);
+					link.download = filename;
+					link.click();
+					setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+					current = updateBattleSnapshot(current, snapshot.id, { imageExport: await blobDataUrl(blob) });
+					saved++;
+				} catch (cause) {
+					failures.push(`State ${index + 1}: ${(cause as Error).message}`);
+				}
+			}
+			onBattleStateChange?.(current);
+			message = failures.length ? `Prepared ${saved} of ${battleState.snapshots.length} battle image downloads. ${failures.length} failed: ${failures.join(' ')}` : `Prepared all ${saved} battle image downloads in order.`;
 		} finally {
 			exportBusy = false;
 		}
@@ -190,7 +302,7 @@
 
 <div class="course" class:light={theme === 'light'}>
 	<header class="topbar">
-		<div class="brand"><span class="mark" aria-hidden="true">◒</span><strong>CHAINSPOT</strong><span class="divider"></span><span>ON THE COURSE</span><small>PROVISIONAL</small></div>
+		<div class="brand"><span class="mark" aria-hidden="true">◒</span><strong>CHAINSPOT</strong><span class="divider"></span><span>ON THE COURSE</span></div>
 		<div class="mode-switch" aria-label="Graphic mode"><button class:active={mode === 'card'} onclick={() => chooseMode('card')} aria-pressed={mode === 'card'}>Single Disc</button><button class:active={mode === 'battle'} onclick={() => chooseMode('battle')} aria-pressed={mode === 'battle'}>Disc Battle</button></div>
 		<button class="export-top" onclick={exportPreview} disabled={!canExport}>{exportBusy ? 'Preparing…' : 'Transparent PNG ↓'}</button>
 	</header>
@@ -219,7 +331,7 @@
 
 		<div class="below-stage">
 			<section class="footage-card" aria-label="Footage controls"><div class="card-head"><div><span class="eyebrow">YOUR FOOTAGE</span><h2>Context image or video</h2></div><button class="quiet" onclick={clearVideo} disabled={!contextUrl}>Clear</button></div>{#if contextUrl}<p>{contextName} · object URL active</p>{:else}<p>Choose a JPG, PNG, WebP, MP4, or WebM to inspect placement in the 16:9 stage.</p>{/if}<input class="hidden" bind:this={videoInput} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onchange={chooseVideo} aria-label="Choose footage" /><button class="outline" onclick={() => videoInput?.click()}>＋ Choose footage</button></section>
-			<section class="selection-card" aria-label="Course selection"><div class="card-head"><div><span class="eyebrow">VIEW CHOICE</span><h2>{mode === 'card' ? 'Single Disc' : 'Disc Battle'}</h2></div><span class="view-pill">VIEW ONLY</span></div>{#if mode === 'card'}<label class="select-label">Disc<select bind:value={selectedDiscId} aria-label="Single Disc choice">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><p>Single Disc is an explicit view preference. Editor selectedEntryId is not used.</p>{:else}<div class="entry-list">{#each workspace.battle.entries as entry, index (entry.id)}{@const disc = workspace.discs.find((item) => item.id === entry.discId)}<button class="entry" class:selected={selectedEntryId === entry.id} onclick={() => inspectEntry(entry.id)} aria-pressed={selectedEntryId === entry.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{disc?.mold || 'Untitled disc'}</strong><small>{disc?.manufacturer || 'Unknown'} · {entry.score}</small>{#if workspace.battleVisual.highlightedEntryId === entry.id}<i class="highlight">Highlight</i>{/if}{#if workspace.battleVisual.emphasizedEntryIds.includes(entry.id)}<i class="winner">★ Winner</i>{/if}</button>{/each}</div><p>Selection is view-only. Authored highlight and multiple winners come from battleVisual.</p>{/if}</section>
+			<section class="selection-card" aria-label="Course selection"><div class="card-head"><div><span class="eyebrow">BATTLE EDITOR</span><h2>{mode === 'card' ? 'Single Disc' : 'Disc Battle'}</h2></div></div>{#if mode === 'card'}<label class="select-label">Disc<select bind:value={selectedDiscId} aria-label="Single Disc choice">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><p>Choose the disc shown in the single card.</p>{:else}<div class="snapshot-actions"><button class="quiet" onclick={duplicateSnapshot}>Duplicate state</button><button class="quiet" onclick={exportAllSnapshots} disabled={!battleState?.snapshots.length || exportBusy}>{exportBusy ? 'Exporting…' : `Export ${battleState?.snapshots.length ?? 0} states`}</button><button class="quiet" onclick={() => moveSnapshot(-1)} disabled={!activeSnapshot}>↑</button><button class="quiet" onclick={() => moveSnapshot(1)} disabled={!activeSnapshot}>↓</button></div>{#if battleState?.snapshots.length}<label class="select-label">Battle state<select value={activeSnapshot?.id ?? ''} onchange={(event) => chooseSnapshot((event.currentTarget as HTMLSelectElement).value)} aria-label="Battle state choice">{#each battleState.snapshots as snapshot, index (snapshot.id)}<option value={snapshot.id}>State {index + 1}{snapshot.imageExport ? ' · PNG saved' : ''}</option>{/each}</select></label>{/if}<div class="add-entry"><label class="select-label">Add disc<select bind:value={selectedDiscId} aria-label="Disc to add">{#each workspace.discs as disc (disc.id)}<option value={disc.id}>{disc.manufacturer} · {disc.mold}{disc.variant ? ` · ${disc.variant}` : ''}</option>{/each}</select></label><button class="outline" type="button" onclick={addBattleEntry} disabled={!activeSnapshot || !selectedDiscId}>＋ Add to battle</button></div><div class="entry-list">{#each renderWorkspace.battle.entries as entry, index (entry.id)}{@const disc = workspace.discs.find((item) => item.id === entry.discId)}<div class="entry" class:selected={selectedEntryId === entry.id} role="button" tabindex="0" onclick={() => inspectEntry(entry.id)} onkeydown={(event) => (event.key === 'Enter' || event.key === ' ') && inspectEntry(entry.id)} aria-pressed={selectedEntryId === entry.id}><span>{String(index + 1).padStart(2, '0')}</span><strong>{disc?.mold || 'Untitled disc'}</strong><label class="score"><span class="sr-only">Score for {disc?.mold || 'disc'}</span><input type="number" step="any" value={entry.score} onchange={(event) => { event.stopPropagation(); const value = Number((event.currentTarget as HTMLInputElement).value); if (Number.isFinite(value)) editSnapshotEntry(entry.id, 'score', value); }} onclick={(event) => event.stopPropagation()} aria-label={`Score for ${disc?.mold || 'disc'}`} /></label>{#if activeSnapshot}<span class="snapshot-edit"><button type="button" onclick={(event) => { event.stopPropagation(); removeBattleEntry(entry.id); }} aria-label="Remove battle entry">Remove</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'highlight'); }} aria-label="Toggle highlight">H</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'winner'); }} aria-label="Toggle winner">W</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'up'); }} aria-label="Move entry up">↑</button><button type="button" onclick={(event) => { event.stopPropagation(); editSnapshotEntry(entry.id, 'down'); }} aria-label="Move entry down">↓</button></span>{/if}{#if renderWorkspace.battleVisual.highlightedEntryId === entry.id}<i class="highlight">Highlight</i>{/if}{#if renderWorkspace.battleVisual.emphasizedEntryIds.includes(entry.id)}<i class="winner">★ Winner</i>{/if}</div>{/each}</div><p>Each change creates a complete new battle state, preserving the earlier state and its image.</p>{/if}</section>
 		</div>
 
 		{#if scene.disclosures?.length}<div class="disclosures" aria-label="Export notes"><strong>Export note</strong>{#each scene.disclosures as disclosure}<span>{disclosure}</span>{/each}</div>{/if}
@@ -235,7 +347,6 @@
 	.course { min-height: 100vh; background: #f5f4ed; color: #243b2d; }
 	.topbar { min-height: 72px; display: flex; align-items: center; gap: 24px; padding: 13px 24px; background: #fffef9; border-bottom: 1px solid #d8d1c4; }
 	.brand { display: flex; align-items: center; gap: 9px; white-space: nowrap; font-size: 13px; letter-spacing: .1em; }
-	.brand small { color: #68766e; font: 9px ui-monospace, monospace; letter-spacing: .08em; }
 	.mark { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 9px; background: #6e8d45; color: #fffef9; font-size: 21px; transform: rotate(-18deg); }
 	.divider { width: 1px; height: 17px; background: #b8b1a4; }
 	.mode-switch { display: flex; gap: 3px; margin: auto; padding: 3px; border: 1px solid #d5cdbf; border-radius: 8px; background: #f5f1e8; }
@@ -290,16 +401,22 @@
 	.outline { width: 100%; border: 1px solid #8aa176; border-radius: 6px; padding: 8px 10px; color: #425b2e; background: transparent; }
 	.outline:hover { background: #eaf1df; }
 	.hidden { display: none; }
-	.view-pill { color: #68766e; font: 9px ui-monospace, monospace; letter-spacing: .08em; }
 	.select-label { display: grid; gap: 6px; color: #68766e; font: 10px ui-monospace, monospace; }
 	.select-label select { width: 100%; }
 	.selection-card p { margin-top: 10px; }
 	.entry-list { display: grid; gap: 5px; }
 	.entry { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 6px; text-align: left; color: #243b2d; background: #f2eee5; }
+	.snapshot-actions, .add-entry { display: flex; align-items: end; gap: 6px; margin-bottom: 9px; }
+	.add-entry .select-label { flex: 1; }
+	.add-entry .outline { width: auto; white-space: nowrap; }
+	.score input { width: 72px; border: 1px solid #d5cdbf; border-radius: 4px; padding: 4px 5px; color: #243b2d; background: #fffef9; font-size: 11px; }
+	.snapshot-edit { display: flex; gap: 3px; align-items: center; }
+	.snapshot-edit button { border: 1px solid #c8c0b3; border-radius: 4px; padding: 3px 5px; color: #425b2e; background: #fffef9; font-size: 9px; }
+	.snapshot-edit button:hover { background: #e1ead5; }
+	.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 	.entry:hover, .entry.selected { border-color: #9db087; background: #e8efdc; }
 	.entry > span { color: #758278; font: 10px ui-monospace, monospace; }
-	.entry strong, .entry small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.entry small { color: #68766e; font-size: 10px; }
+	.entry strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.entry i { padding: 3px 5px; border-radius: 4px; font: 9px ui-monospace, monospace; font-style: normal; white-space: nowrap; }
 	.highlight { color: #425b2e; background: #dcebc8; }
 	.winner { color: #8e6723; background: #f5e9ca; }

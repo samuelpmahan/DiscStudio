@@ -43,7 +43,7 @@
 		</div>
 		<div class="numbers" aria-label="Flight numbers">
 			{#each flightKeys as key}<div>
-					<strong>{formatNumber(disc.flight[key])}</strong><span>{key}</span>
+					<strong>{formatNumber(disc.flight?.[key])}</strong><span>{key}</span>
 				</div>{/each}
 		</div>
 	</div>

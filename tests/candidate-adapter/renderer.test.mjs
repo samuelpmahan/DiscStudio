@@ -167,3 +167,10 @@ test('PNG bridge rejects unsupported scenes without silently remapping', async (
   const result = renderCandidateScene(workspace({ battleAppearance: { layout: 'grid', showScores: true } }));
   await assert.rejects(pngFromCandidateScene(result), /cannot faithfully represent.*grid layout/);
 });
+
+test('renders a disc whose complete flight object is unknown as em dashes', () => {
+  const source = workspace({ discs: [{ ...workspace().discs[0], flight: undefined }, workspace().discs[1]] });
+  const result = renderCandidateScene(source, { layout: 'row' });
+  assert.equal(result.ok, true);
+  assert.match(result.svg, /—/);
+});
